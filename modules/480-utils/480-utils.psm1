@@ -116,9 +116,6 @@ function Set-VMNetwork($conf) {
         # Get available VMs in the specified folder
         $vmList = Get-VM | Select-Object Name -ExpandProperty Name
  
-        # Debug: Print the VM list
-        Write-Host "VM List: $($vmList -join ', ')" -ForegroundColor Cyan
- 
         # Check if there are any VMs available
         if ($vmList.Count -eq 0) {
             Write-Host "No VMs found in the specified folder." -ForegroundColor Red
@@ -156,11 +153,36 @@ function Set-VMNetwork($conf) {
         # Get the VM object
         $vm = Get-VM -Name $selectedVMName -ErrorAction Stop
  
-        # Get available network port groups
-        $networkList = Get-VirtualNetwork | Select-Object Name -ExpandProperty Name
+        # Get network adapters for the VM
+        $networkAdapters = Get-NetworkAdapter -VM $vm -ErrorAction Stop
  
-        # Debug: Print the network list
-        # Write-Host "Available Networks: $($networkList -join ', ')" -ForegroundColor Cyan
+        # Check if there are any network adapters
+        if ($networkAdapters.Count -eq 0) {
+            Write-Host "No network adapters found for the selected VM." -ForegroundColor Red
+            return
+        }
+ 
+        # Display numbered list of network adapters
+        Write-Host "Available Network Adapters:" -ForegroundColor Cyan
+        for ($i = 0; $i -lt $networkAdapters.Count; $i++) {
+            Write-Host "$($i + 1). Adapter $($i + 1) - Type: $($networkAdapters[$i].Type), Current Network: $($networkAdapters[$i].NetworkName)"
+        }
+ 
+        # Prompt user to select a network adapter by number
+        $adapterNumber = Read-Host -Prompt "Enter the number of the network adapter to modify"
+        $adapterIndex = [int]$adapterNumber - 1
+ 
+        # Validate the selected adapter number
+        if ($adapterIndex -lt 0 -or $adapterIndex -ge $networkAdapters.Count) {
+            Write-Host "Invalid selection. Please enter a number between 1 and $($networkAdapters.Count)." -ForegroundColor Red
+            return
+        }
+ 
+        # Get the selected network adapter
+        $selectedAdapter = $networkAdapters[$adapterIndex]
+ 
+        # Get available network port groups
+        $networkList = Get-VirtualPortGroup | Select-Object Name -ExpandProperty Name
  
         # Check if there are any networks available
         if ($networkList.Count -eq 0) {
@@ -190,19 +212,10 @@ function Set-VMNetwork($conf) {
         # Debug: Print the selected network
         Write-Host "Selected Network: $selectedNetwork" -ForegroundColor Cyan
  
-        # Get the network adapter of the VM
-        $networkAdapter = Get-NetworkAdapter -VM $vm -ErrorAction Stop
+        # Set the new network for the selected network adapter
+        Set-NetworkAdapter -NetworkAdapter $selectedAdapter -NetworkName $selectedNetwork -Confirm:$false -ErrorAction Stop
  
-        # Validate network adapter existence
-        if (-not $networkAdapter) {
-            Write-Host "No network adapter found for the selected VM." -ForegroundColor Red
-            return
-        }
- 
-        # Set the new network for the VM
-        Set-NetworkAdapter -NetworkAdapter $networkAdapter -NetworkName $selectedNetwork -Confirm:$false -ErrorAction Stop
- 
-        Write-Host "Network adapter updated to '$selectedNetwork' for VM '$selectedVMName'." -ForegroundColor Green
+        Write-Host "Network adapter $($adapterIndex + 1) updated to '$selectedNetwork' for VM '$selectedVMName'." -ForegroundColor Green
     }
     catch {
         Write-Host "An error occurred: $_" -ForegroundColor Red
@@ -283,5 +296,87 @@ function Set-VMState($conf) {
     }
     catch {
         Write-Host "An error occurred: $_" -ForegroundColor Red
+    }
+}
+
+function Get-IP($conf) {
+    try {
+        # Get available VMs in the specified folder
+        $vmList = Get-VM | Select-Object Name -ExpandProperty Name
+ 
+        # Check if there are any VMs available
+        if ($vmList.Count -eq 0) {
+            Write-Host "No VMs found in the specified folder." -ForegroundColor Red
+            return
+        }
+ 
+        # Display numbered list of VMs
+        Write-Host "Available VMs:" -ForegroundColor Cyan
+        for ($i = 0; $i -lt $vmList.Count; $i++) {
+            Write-Host "$($i + 1). $($vmList[$i])"
+        }
+ 
+        # Prompt user to select a VM by number
+        $selectedNumber = Read-Host -Prompt "Enter the number of the VM to get IP details"
+        $selectedIndex = [int]$selectedNumber - 1
+ 
+        # Validate the selected number
+        if ($selectedIndex -lt 0 -or $selectedIndex -ge $vmList.Count) {
+            Write-Host "Invalid selection. Please enter a number between 1 and $($vmList.Count)." -ForegroundColor Red
+            return
+        }
+ 
+        # Get the selected VM name
+        $selectedVMName = $vmList[$selectedIndex].Trim()
+ 
+        # Debug: Print the selected VM name
+        Write-Host "Selected VM Name: $selectedVMName" -ForegroundColor Cyan
+ 
+        # Validate the selected VM name
+        if ([string]::IsNullOrEmpty($selectedVMName)) {
+            Write-Host "The selected VM name is null or empty. Please check the VM list." -ForegroundColor Red
+            return
+        }
+ 
+        # Get the VM object
+        $vm = Get-VM -Name $selectedVMName -ErrorAction Stop
+ 
+        # Get VM Guest information
+        $guest = Get-VMGuest -VM $vm -ErrorAction Stop
+ 
+        # Get network adapters
+        $network = Get-NetworkAdapter -VM $vm -ErrorAction Stop
+ 
+        # Iterate through network adapters
+        $i = 0
+        foreach($adapter in $network){
+            $name = $adapter.Name
+            $ip = $guest.IPAddress[$i] | Where-Object { $_ -match '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' }
+            $mac = $adapter.MACAddress
+ 
+            Write-Host -ForegroundColor Cyan "Network Information for $($name)"
+            Write-Host -ForegroundColor Cyan "IP Address: $ip"
+            Write-Host -ForegroundColor Cyan "MAC Address: $mac"
+ 
+            $i=$i+2
+        }
+        return $network
+    }
+    catch {
+        Write-Host "An error occurred: $_" -ForegroundColor Red
+    }
+}
+
+function New-Network {
+    try {
+        # Creates a new virtual Switch and port group
+        $vswitch = Read-Host "Enter a name for the new virtual switch"
+        $vmHost = (Get-VMHost).Name
+        $switch = New-VirtualSwitch -VMHost $vmHost -Name $vswitch -ErrorAction Stop
+        New-VirtualPortGroup -VirtualSwitch $vswitch -Name $vswitch -ErrorAction Stop
+        Write-Host -ForegroundColor Green "The new virtual switch $vswitch was created successfully"
+    }
+    catch {
+        Write-Host -ForegroundColor Red "An error occurred: $_"
     }
 }

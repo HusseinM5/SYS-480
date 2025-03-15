@@ -7,8 +7,10 @@ $conf=Get-480Config -config_Path "/home/champuser/Desktop/SYS-480/480.json"
 
 $options = Read-Host -Prompt "Select a function:
 1. Linked Clone
-2. Network Adapter
+2. Set Network Adapter
 3. VM State
+4. Get-IP
+5. Create Network
 "
 
 switch ($options) {
@@ -23,6 +25,14 @@ switch ($options) {
     '3' {
         Clear-Host
         Set-VMState -conf $conf
+    }
+    '4'{
+        Clear-Host
+        Get-IP -conf $conf
+    }
+    '5'{
+        Clear-Host
+        New-Network
     }
     default {
         Write-Host -ForegroundColor Red "Invalid option!"
