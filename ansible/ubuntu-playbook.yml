@@ -1,0 +1,56 @@
+- name: Ubuntu configuration
+  hosts: ubuntu
+  tasks:
+  - name: Create the .ssh directory
+    file:
+      path: "/home/{{ ansible_user }}/.ssh"
+      state: directory
+      mode: 0700
+  - name: Create authorized_keys file
+    file:
+      path: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+      state: touch
+      mode: 0644
+  - name: Copy the public key to authorized_keys
+    blockinfile:
+      dest: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+      block: "{{ public_key }}"
+ 
+  - name: Create sudoers file for 480
+    file:
+      path: /etc/sudoers.d/480
+      state: touch
+      mode: 0440
+    become: yes
+ 
+  - name: Create an entry in /etc/sudoers.d/480
+    blockinfile:
+      dest: /etc/sudoers.d/480
+      block: "{{ ansible_user }} ALL=(ALL) NOPASSWD: ALL"
+    become: yes
+ 
+  - name: Set the hostname
+    hostname:
+      name: "{{ hostname }}"
+    become: yes
+ 
+  - name: Add hostname to /etc/hosts
+    lineinfile:
+      path: /etc/hosts
+      line: '127.0.1.1 {{ hostname }}'
+    become: yes
+ 
+  - name: Run netplan
+    template:
+      src: netplan.j2
+      dest: /etc/netplan/00-installer-config.yaml
+      mode: 0644
+      owner: root
+      group: root
+    become: yes
+ 
+  - name: bounce the box
+    shell: "sleep 5 && shutdown -r"
+    become: yes
+    async: 1
+    poll: 0
