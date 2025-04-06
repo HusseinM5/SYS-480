@@ -1,0 +1,164 @@
+- name: splunk config
+  hosts: enterprise_server
+  vars_prompt:
+    - name: splunk_admin_password
+      prompt: Please enter your new splunk admin password
+      private: true
+ 
+  tasks:
+  - name: create the .ssh directory if it doesn't exist
+    file:
+      path: "/home/{{ ansible_user }}/.ssh"
+      state: directory
+      mode: 0700
+ 
+  - name: create authorized_key file
+    file:
+      path: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+      state: touch
+      mode: 0644
+ 
+  - name: copy over ssh key to authorized_keys
+    blockinfile:
+      dest: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+      block: "{{ public_key }}"
+ 
+  - name: create sudoers file for 480
+    file:
+      path: /etc/sudoers.d/480
+      state: touch
+      mode: 0400
+    become: yes
+ 
+  - name: create an entry in /etc/sudoers.d/480
+    blockinfile:
+      dest: /etc/sudoers.d/480
+      block: "{{ ansible_user }}  ALL=(ALL) NOPASSWD: ALL"
+    become: yes
+ 
+  - name: set hostname
+    hostname:
+      name: "{{ hostname }}"
+    become: yes
+ 
+  - name: add host to hosts file
+    lineinfile:
+      path: /etc/hosts
+      line: "127.0.1.1  {{ hostname }}"
+    become: yes
+ 
+  - name: configure netplan
+    ansible.builtin.template:
+      src: netplan.yml.j2
+      dest: /etc/netplan/00-installer-config.yaml
+      mode: "0644"
+      owner: root
+      group: root
+    become: yes
+
+  - name: create splunkadmin
+    ansible.builtin.user:
+      name: splunkadmin
+      password: "{{ splunk_admin_password | password_hash('sha512') }}"
+      shell: /bin/bash
+      groups: sudo
+      append: yes
+    become: yes
+ 
+  - name: copy the enterprise deb
+    ansible.builtin.copy:
+      src: "{{ splunk_enterprise_deb }}"
+      dest: "/tmp/{{ splunk_enterprise_deb }}"
+      owner: root
+      group: root
+      mode: '0774'
+    become: true
+ 
+  - name: install splunk enterprise deb
+    ansible.builtin.apt:
+      deb: "/tmp/{{ splunk_enterprise_deb }}"
+    become: true
+ 
+  - name: copy user seed
+    ansible.builtin.template:
+      src: user-seed.j2
+      dest: /opt/splunk/etc/system/local/user-seed.conf
+      owner: root
+      group: root
+      mode: '0600'
+    become: true
+ 
+  - name: install linux addon
+    ansible.builtin.unarchive:
+      src: splunk-add-on-for-unix-and-linux_1000.tgz
+      dest: /opt/splunk/etc/apps
+    become: true
+ 
+  - name: create necessary folders for the new addon
+    file:
+      path: /opt/splunk/etc/apps/Splunk_TA_nix/local
+      state: directory
+      mode: 0700
+    become: true
+ 
+  - name: copy inputs.conf
+    ansible.builtin.template:
+      src: unix_inputs.conf.j2
+      dest: /opt/splunk/etc/apps/Splunk_TA_nix/local/inputs.conf
+      owner: root
+      group: root
+      mode: '0660'
+    become: true
+ 
+  - name: add a new index called {{ splunk_group }}
+    ansible.builtin.blockinfile:
+      path: /opt/splunk/etc/system/local/indexes.conf
+      block: |
+        [{{ splunk_group }}]
+        homePath = $SPLUNK_DB/{{ splunk_group }}/db
+        coldPath = $SPLUNK_DB/{{ splunk_group }}/colddb
+        thawedPath = $SPLUNK_DB/{{ splunk_group }}/thaweddb
+      create: true
+      owner: root
+      group: root
+      mode: '0660'
+    become: true
+ 
+  - name: add a reciever on port 9997/TCP
+    ansible.builtin.copy:
+      src: inputs.conf
+      dest: /opt/splunk/etc/system/local/inputs.conf
+      owner: root
+      group: root
+      mode: '0660'
+    become: true
+
+  - name: change the minimum free space
+    ansible.builtin.lineinfile:
+      path: /opt/splunk/etc/system/default/server.conf
+      search_string: 'minFreeSpace = 5000'
+      line: minFreeSpace = 50
+      owner: root
+      group: root
+      mode: '0660'
+    become: true
+ 
+  - name: change ownership to splunkadmin
+    ansible.builtin.file:
+      path: /opt/splunk
+      state: directory
+      recurse: yes
+      owner: splunkadmin
+      group: splunkadmin
+    become: true
+ 
+  - name: enable splunk
+    ansible.builtin.shell: /opt/splunk/bin/splunk enable boot-start -user splunkadmin --accept-license --answer-yes --no-prompt
+    become: true
+ 
+  - name: bounce the box
+    shell: "sleep 5 && shutdown -r"
+    become: yes
+    async: 1
+    poll: 0
+ 

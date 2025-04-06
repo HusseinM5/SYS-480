@@ -1,0 +1,26 @@
+splunk:
+  hosts:
+  children:
+    enterprise_server:
+      hosts:
+        10.0.5.88:
+          hostname: splunk
+          lan_ip: 10.0.5.200
+
+    forwarders:
+      hosts:
+        10.0.5.30
+
+  vars:
+    public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCvGr2RrLsFG59wC2csVbfQImLqXMPLmXWEviYIPRh8gRzn+fCaYlhY7jVGaWw93kLXkGc4vzTPugfJzxyzHC1W60rzgNYNy8SIUTAGq3iekPJvG3y0EQ91LMVVoXtWtHUmLz5/7q6dpHJ6QLO9uKhXi/FDJ/R06vfGwtX4irotE5vxeCeUk+VSA9McrGJWbavTKmeSord17ces9rU3QMBOOI4WwSmkkdZTvmmm7LjvixpGz6IAoTDqpeyN0u2m6roYfttSKTbNoDXdaNHiUktlKh6VOoXRKC9SV4+CUxp+gz9AJka54W4R9ryKkU0ud3bKqSSiwg/M2D+Ijrt8ZuHgpZsJWQRll282wflSy2lQl37BIBg3dO10mIMQ+VV+OWDXQuZShfXrZM9sBNwAIjOIMAkeCYbuifQfDEhrFSYxIKHC4rsP2RQvaa5tUa4HIXi+lS9gghZi/vK69cwtU0pj0nWhltMqnXqH9afwliDW3CtURd8saIC8RUr47enpIME= vx@xubuntu-wan"
+    ansible_user: rangeuser
+    device: ens33
+    prefix: 24
+    gateway: 10.0.5.2
+    name_server: 10.0.5.5
+    domain: blue1.local
+    splunk_enterprise_deb: splunk-9.4.1-e3bdab203ac8-linux-amd64.deb
+    splunk_forwarder_deb: splunkforwarder-9.4.1-e3bdab203ac8-linux-amd64.deb
+    splunk_server: 10.0.5.200
+    splunk_port: 9997
+    splunk_group: 480
