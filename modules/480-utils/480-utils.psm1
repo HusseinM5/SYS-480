@@ -380,3 +380,94 @@ function New-Network {
         Write-Host -ForegroundColor Red "An error occurred: $_"
     }
 }
+
+function Set-IPAddress {
+    try {
+        # Get available VMs
+        $vmList = Get-VM | Select-Object Name -ExpandProperty Name
+ 
+        # Check if there are any VMs available
+        if ($vmList.Count -eq 0) {
+            Write-Host "No VMs found." -ForegroundColor Red
+            return
+        }
+ 
+        # Display numbered list of VMs
+        Write-Host "Available VMs:" -ForegroundColor Cyan
+        for ($i = 0; $i -lt $vmList.Count; $i++) {
+            Write-Host "$($i + 1). $($vmList[$i])"
+        }
+ 
+        # Prompt user to select a VM by number
+        $selectedNumber = Read-Host -Prompt "Enter the number of the VM to configure"
+        $selectedIndex = [int]$selectedNumber - 1
+ 
+        # Validate the selected number
+        if ($selectedIndex -lt 0 -or $selectedIndex -ge $vmList.Count) {
+            Write-Host "Invalid selection. Please enter a number between 1 and $($vmList.Count)." -ForegroundColor Red
+            return
+        }
+ 
+        # Get the selected VM name
+        $selectedVMName = $vmList[$selectedIndex]
+ 
+        # Debug: Print the selected VM name
+        Write-Host "Selected VM: $selectedVMName" -ForegroundColor Cyan
+ 
+        # Validate the selected VM name
+        if ([string]::IsNullOrEmpty($selectedVMName)) {
+            Write-Host "The selected VM name is null or empty. Please check the VM list." -ForegroundColor Red
+            return
+        }
+ 
+        # Get the VM object
+        $vmObject = Get-VM -Name $selectedVMName -ErrorAction Stop
+ 
+        # Prompt for credentials
+        $GuestUser = Read-Host -Prompt "Enter guest OS username"
+        $GuestPassword = Read-Host -Prompt "Enter guest OS password" -AsSecureString
+ 
+        # Prompt for network configuration
+        $IPAddress = Read-Host -Prompt "Enter IP address"
+        $SubnetMask = Read-Host -Prompt "Enter subnet mask"
+        $Gateway = Read-Host -Prompt "Enter default gateway"
+        $NameServer = Read-Host -Prompt "Enter DNS server"
+ 
+ 
+        # Confirm VM selection and IP configuration
+        Write-Host "VM to configure: $selectedVMName" -ForegroundColor Green
+        Write-Host "IP Configuration:" -ForegroundColor Green
+        Write-Host "  IP Address: $IPAddress" -ForegroundColor Green
+        Write-Host "  Subnet Mask: $SubnetMask" -ForegroundColor Green
+        Write-Host "  Gateway: $Gateway" -ForegroundColor Green
+        Write-Host "  Name Server: $NameServer" -ForegroundColor Green
+ 
+        $confirmation = Read-Host "Proceed with configuration? (Y/N)"
+        if ($confirmation -ne "Y" -and $confirmation -ne "y") {
+            Write-Host "Operation cancelled by user." -ForegroundColor Yellow
+            return
+        }
+ 
+        # The commands that will be executed
+        $NetshCommand = "netsh interface ip set address name='Ethernet0' static $IPAddress $SubnetMask $Gateway"
+        $DnsCommand = "netsh interface ip set dns name='Ethernet0' static $NameServer"
+
+        $fullScript = "$NetshCommand`r`n$DnsCommand"
+
+        # Execute the script using Invoke-VMScript
+        Write-Host "Applying network configuration to VM..." -ForegroundColor Cyan
+        $result = Invoke-VMScript -VM $vmObject -ScriptText $fullScript -GuestUser $GuestUser -GuestPassword $GuestPassword
+ 
+        # Display the result
+        if ($result.ExitCode -eq 0) {
+            Write-Host "Network configuration successfully applied to $selectedVMName." -ForegroundColor Green
+        }
+        else {
+            Write-Host "Failed to apply network configuration. Exit code: $($result.ExitCode)" -ForegroundColor Red
+            Write-Host "Error output: $($result.ScriptOutput)" -ForegroundColor Red
+        }
+    }
+    catch {
+        Write-Host "An error occurred: $_" -ForegroundColor Red
+    }
+}

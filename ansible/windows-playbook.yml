@@ -1,0 +1,53 @@
+- name: Configure Blue1 DC
+  hosts: 10.0.5.5
+  vars_prompt:
+  - name: username
+    prompt: Enter username
+    private: false
+  - name: password
+    prompt: Enter password
+  - name: domain
+    prompt: Enter domain name
+    private: false
+  - name: hostname
+    prompt: Enter new hostname
+    private: false
+
+  vars:
+    ansible_shell_type: powershell
+  tasks:
+  - name: Configure ADDS
+    ansible.windows.win_powershell:
+      script: |
+        Rename-Computer -NewName "{{ hostname }}"
+
+  - name: Configure Forest
+    ansible.windows.win_domain:
+      dns_domain_name: "{{ domain }}"
+      safe_mode_password: "{{ password }}"
+    register: domain_install
+
+  - name: Reboot System
+    win_reboot:
+      reboot_timeout: 600
+      post_reboot_delay: 120
+      connect_timeout: 300
+    when: domain_install.reboot_required
+
+  - name: Add user to DA
+    win_domain_group_membership:
+      name: "Domain Admins"
+      members:
+        - ["{{ username }}"]
+      state: present
+
+  - name: Configure OU
+    ansible.windows.win_powershell:
+      script: |
+        Add-OU -Identity "blue1" -Members deployer
+        New-ADOrganizationalUnit -Name "BLUE1" -Path "DC=BLUE1,DC=LOCAL"
+        New-ADOrganizationalUnit -Name "Accounts" -Path "OU=BLUE1,DC=BLUE1,DC=LOCAL"
+        New-ADOrganizationalUnit -Name "Groups" -Path "OU=Accounts,OU=BLUE1,DC=BLUE,DC=LOCAL"
+        New-ADOrganizationalUnit -Name "Computers" -Path "OU=BLUE1,DC=BLUE1,DC=LOCAL"
+        New-ADOrganizationalUnit -Name "Servers" -Path "OU=Computers,OU=BLUE1,DC=BLUE1,DC=LOCAL"
+        New-ADOrganizationalUnit -Name "Workstations" -Path "OU=Computers,OU=BLUE1,DC=BLUE1,DC=LOCAL"

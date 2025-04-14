@@ -11,6 +11,7 @@ $options = Read-Host -Prompt "Select a function:
 3. VM State
 4. Get-IP
 5. Create Network
+6. Set Windows VM IP
 "
 
 switch ($options) {
@@ -33,6 +34,10 @@ switch ($options) {
     '5'{
         Clear-Host
         New-Network
+    }
+    '6'{
+        Clear-Host
+        Set-IPAddress
     }
     default {
         Write-Host -ForegroundColor Red "Invalid option!"
